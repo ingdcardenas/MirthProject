@@ -1,0 +1,29 @@
+# Configuracion real con credenciales
+.env
+
+# Cookie jars / archivos de sesion Mirth (persistente y temporales)
+*.cookiejar
+/tmp/
+mirth-cookie-jar*
+.mirth-session
+
+# Backups temporales de export/import
+*.tmp
+*.bak
+
+# XML reconstruido por build-canal.sh dentro de cada carpeta-proyecto
+# (artefacto derivado; la fuente editable son los archivos legibles y
+# original.xml, no este archivo)
+canal.xml
+
+# Canales exportados reales (datos sensibles del hospital); se conserva
+# .gitkeep para versionar la carpeta vacia
+canales/*
+!canales/.gitkeep
+
+# Ejemplos con datos/credenciales reales, no aptos para versionar
+ejemplos/
+
+# Cache de Python
+__pycache__/
+*.pyc
