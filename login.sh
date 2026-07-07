@@ -15,8 +15,11 @@
 #
 # Historial de hosts: cada host/URL usado se guarda en .mirth-hosts (raiz
 # del repo, gitignoreado) para poder elegirlo de nuevo en logins futuros.
-# Precedencia de MIRTH_URL: si ya viene por entorno/.env se usa tal cual
-# sin preguntar (solo se registra en el historial); si no, se pregunta
+# Precedencia de MIRTH_URL: si ya viene por entorno/.env, en un terminal
+# interactivo se muestra ese servidor y se pregunta si desea cambiarse
+# (Enter = mantenerlo, o elegir/escribir otro desde el historial); en
+# ejecucion no interactiva (stdin sin TTY, ej. CI/pipe) se respeta tal
+# cual sin preguntar. Si no viene por entorno/.env, se pregunta siempre
 # interactivamente ofreciendo el ultimo host usado como default y el resto
 # del historial como lista numerada. Ver detalle mas abajo en el script.
 #
@@ -67,19 +70,19 @@ _mirth_parse_host_input() {
     fi
 }
 
-if [[ -n "${MIRTH_URL:-}" ]]; then
-    # Caso 1: viene de entorno/.env, se respeta sin preguntar.
-    mirth_hosts_add "${MIRTH_URL}"
-else
+# Ofrece el historial de hosts (.mirth-hosts): default = ultimo usado,
+# lista numerada de guardados, o posibilidad de escribir un host/URL
+# nuevo. Deja el resultado en MIRTH_URL. Reutilizada por el Caso 1
+# (cuando el usuario decide cambiar el servidor de .env) y el Caso 2.
+_mirth_elegir_host_desde_historial() {
     mapfile -t _hosts_hist < <(mirth_hosts_list)
 
     if [[ "${#_hosts_hist[@]}" -eq 0 ]]; then
-        # Caso 3: sin historial aun.
+        # Sin historial aun.
         read -r -p "Host de Mirth Connect [localhost]: " mirth_host
         mirth_host="${mirth_host:-localhost}"
         MIRTH_URL="$(_mirth_parse_host_input "${mirth_host}")"
     else
-        # Caso 2: hay historial -> ofrecer default + lista numerada.
         _ultimo="${_hosts_hist[0]}"
         echo "Hosts guardados:"
         for i in "${!_hosts_hist[@]}"; do
@@ -95,7 +98,20 @@ else
             MIRTH_URL="$(_mirth_parse_host_input "${_seleccion}")"
         fi
     fi
+}
 
+if [[ -n "${MIRTH_URL:-}" ]]; then
+    # Caso 1: viene de entorno/.env. En terminal interactivo se ofrece
+    # cambiarlo; en ejecucion no interactiva (sin TTY) se respeta tal cual.
+    if [[ -t 0 ]]; then
+        read -r -p "Servidor actual (de .env): ${MIRTH_URL} - ¿cambiar de servidor? [s/N]: " _cambiar
+        if [[ "${_cambiar}" =~ ^[sS]$ ]]; then
+            _mirth_elegir_host_desde_historial
+        fi
+    fi
+    mirth_hosts_add "${MIRTH_URL}"
+else
+    _mirth_elegir_host_desde_historial
     mirth_hosts_add "${MIRTH_URL}"
 fi
 
