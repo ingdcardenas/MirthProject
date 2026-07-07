@@ -22,6 +22,9 @@
 # cual sin preguntar. Si no viene por entorno/.env, se pregunta siempre
 # interactivamente ofreciendo el ultimo host usado como default y el resto
 # del historial como lista numerada. Ver detalle mas abajo en el script.
+# Si el host final elegido difiere del que traia .env, se reemplaza la
+# linea MIRTH_URL= en .env (si el archivo existe) para que el proximo
+# login muestre como "servidor actual" el ultimo realmente usado.
 #
 # Codigos de salida:
 #   0  -> login OK, sesion persistida
@@ -36,6 +39,11 @@ if [[ -f "${SCRIPT_DIR}/.env" ]]; then
     # shellcheck disable=SC1091
     source "${SCRIPT_DIR}/.env"
 fi
+
+# Se guarda el valor original de .env/entorno para poder comparar mas
+# adelante si el usuario termino eligiendo un host distinto y, en tal
+# caso, persistir el cambio en .env (ver _mirth_persistir_env_url).
+_mirth_url_original="${MIRTH_URL:-}"
 
 if ! command -v curl >/dev/null 2>&1; then
     echo "[ERROR] Se requiere 'curl' instalado en el sistema." >&2
@@ -100,6 +108,32 @@ _mirth_elegir_host_desde_historial() {
     fi
 }
 
+# Persiste MIRTH_URL en SCRIPT_DIR/.env, reemplazando la linea MIRTH_URL=
+# existente (o agregandola si no hay ninguna) y dejando el resto del
+# archivo intacto. Politica conservadora: si no existe .env (el valor
+# solo venia por variable de entorno), NO se crea uno nuevo: solo se
+# informa por stdout que se usara el host elegido (ya queda en el
+# historial .mirth-hosts para el proximo login).
+_mirth_persistir_env_url() {
+    local nuevo_url="${1:-}"
+    local env_file="${SCRIPT_DIR}/.env"
+
+    if [[ ! -f "${env_file}" ]]; then
+        echo "[INFO] No existe ${env_file} (MIRTH_URL venia solo por entorno);" \
+             "se usara '${nuevo_url}' en esta ejecucion, y queda guardado en" \
+             "el historial .mirth-hosts para el proximo login."
+        return 0
+    fi
+
+    if grep -qE '^[[:space:]]*MIRTH_URL=' "${env_file}"; then
+        # Delimitador '|' en sed (en vez de '/') porque la URL contiene '/'.
+        sed -i -E "s|^[[:space:]]*MIRTH_URL=.*|MIRTH_URL=\"${nuevo_url}\"|" "${env_file}"
+    else
+        printf 'MIRTH_URL="%s"\n' "${nuevo_url}" >> "${env_file}"
+    fi
+    mirth_log "Servidor actualizado en ${env_file}: MIRTH_URL=${nuevo_url}"
+}
+
 if [[ -n "${MIRTH_URL:-}" ]]; then
     # Caso 1: viene de entorno/.env. En terminal interactivo se ofrece
     # cambiarlo; en ejecucion no interactiva (sin TTY) se respeta tal cual.
@@ -113,6 +147,13 @@ if [[ -n "${MIRTH_URL:-}" ]]; then
 else
     _mirth_elegir_host_desde_historial
     mirth_hosts_add "${MIRTH_URL}"
+fi
+
+# Si el host final quedo distinto al que traia .env/entorno, persistirlo
+# en .env para que el proximo login ya muestre el host realmente usado
+# (y no siempre el valor original de .env).
+if [[ "${MIRTH_URL}" != "${_mirth_url_original}" ]]; then
+    _mirth_persistir_env_url "${MIRTH_URL}"
 fi
 
 export MIRTH_URL
