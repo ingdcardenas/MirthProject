@@ -48,6 +48,11 @@ MIRTH_COOKIE_JAR="${MIRTH_COOKIE_JAR:-${_MIRTH_LIB_DIR}/.mirth-session}"
 
 MIRTH_INSECURE_TLS="${MIRTH_INSECURE_TLS:-true}"
 
+# Historial de hosts usados para login (uno por linea, mas reciente primero).
+# Vive junto al cookie jar, en la raiz del proyecto. NUNCA se commitea
+# (puede contener IPs internas del hospital) -> ver .gitignore.
+MIRTH_HOSTS_FILE="${MIRTH_HOSTS_FILE:-${_MIRTH_LIB_DIR}/.mirth-hosts}"
+
 # Codigo de retorno especial cuando el servidor responde con un HTTP de error
 readonly MIRTH_ERR_HTTP=10
 readonly MIRTH_ERR_LOGIN=11
@@ -344,4 +349,48 @@ s = re.sub(r"_+", "_", s)
 s = s.strip("_")
 print(s)
 ' "${nombre}"
+}
+
+# ---------------------------------------------------------------------------
+# mirth_hosts_list: imprime el historial de hosts/URLs usados, uno por
+# linea, mas reciente primero. Silencioso (sin salida) si no existe
+# historial todavia.
+# ---------------------------------------------------------------------------
+mirth_hosts_list() {
+    [[ -f "${MIRTH_HOSTS_FILE}" ]] && cat "${MIRTH_HOSTS_FILE}"
+    return 0
+}
+
+# ---------------------------------------------------------------------------
+# mirth_hosts_last: imprime el ultimo host/URL usado (primera linea del
+# historial), o nada si no hay historial.
+# ---------------------------------------------------------------------------
+mirth_hosts_last() {
+    mirth_hosts_list | head -n 1
+}
+
+# ---------------------------------------------------------------------------
+# mirth_hosts_add <url>
+#
+# Agrega <url> al frente del historial (mas reciente = primera linea),
+# deduplicando: si ya existia en el historial (en cualquier posicion), se
+# remueve esa entrada previa antes de reinsertarla al frente. Crea el
+# archivo si no existia.
+# ---------------------------------------------------------------------------
+mirth_hosts_add() {
+    local url="${1:-}"
+    [[ -z "${url}" ]] && return 1
+
+    mkdir -p "$(dirname -- "${MIRTH_HOSTS_FILE}")"
+
+    local tmp
+    tmp="$(mktemp)"
+    {
+        printf '%s\n' "${url}"
+        if [[ -f "${MIRTH_HOSTS_FILE}" ]]; then
+            grep -Fxv -- "${url}" "${MIRTH_HOSTS_FILE}" || true
+        fi
+    } > "${tmp}"
+    mv "${tmp}" "${MIRTH_HOSTS_FILE}"
+    return 0
 }

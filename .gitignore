@@ -7,6 +7,9 @@
 mirth-cookie-jar*
 .mirth-session
 
+# Historial de hosts usados para login (puede contener IPs internas)
+.mirth-hosts
+
 # Backups temporales de export/import
 *.tmp
 *.bak
